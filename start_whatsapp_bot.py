@@ -108,8 +108,14 @@ def validate_env(skip_twilio: bool = False):
         else:
             ok(f"TWILIO_ACCOUNT_SID: {account_sid[:10]}…")
 
-        if len(auth_token) < 10:
-            issues.append("TWILIO_AUTH_TOKEN looks too short — double check your .env.")
+        _placeholder_hints = ("replace", "your", "example", "placeholder", "change")
+        _is_placeholder = any(h in auth_token.lower() for h in _placeholder_hints)
+        if not auth_token or len(auth_token) < 10 or _is_placeholder:
+            issues.append(
+                "TWILIO_AUTH_TOKEN looks invalid or is still the placeholder value.\n"
+                "     Get your real 32-character token from https://console.twilio.com\n"
+                "     (Main Dashboard → Auth Token → click the eye icon)."
+            )
         else:
             ok("TWILIO_AUTH_TOKEN is set.")
 
@@ -232,27 +238,35 @@ def register_twilio_webhook(public_url: str):
     try:
         client = Client(account_sid, auth_token)
 
-        # Find the incoming phone number resource
-        numbers = client.incoming_phone_numbers.list(phone_number=raw_number)
-        if numbers:
-            resource = numbers[0]
-            resource.update(
-                sms_url=webhook_url,
-                sms_method="POST",
-            )
-            ok(f"Webhook set on phone number {raw_number}")
-        else:
-            # Try messaging services / sandbox approach
-            warn(f"Phone number {raw_number} not found in your account.")
-            warn("If you are using the Twilio Sandbox, set the webhook manually:")
-            print()
-            print(f"    {BOLD}{webhook_url}{RESET}")
-            print()
-            print("  Twilio Console → Messaging → Try it out → Send a WhatsApp message")
-            print("  → 'When a message comes in' field → paste the URL above → Save.")
-            return
+        # ── WhatsApp Business API numbers (non-sandbox) ──────────────────────
+        # For a purchased WhatsApp-enabled number, update its webhook via the
+        # IncomingPhoneNumber resource using sms_url (Twilio routes WhatsApp
+        # messages the same way for business API numbers).
+        registered = False
+        try:
+            numbers = client.incoming_phone_numbers.list(phone_number=raw_number)
+            if numbers:
+                numbers[0].update(sms_url=webhook_url, sms_method="POST")
+                ok(f"Webhook set on WhatsApp Business number {raw_number}")
+                ok(f"Webhook URL: {webhook_url}")
+                registered = True
+        except Exception:
+            pass
 
-        ok(f"Webhook URL: {webhook_url}")
+        if not registered:
+            # ── Twilio Sandbox (most common during development) ────────────────
+            # The sandbox is configured via Messaging → Try it out → WhatsApp.
+            # There is no REST API to set this automatically — manual step only.
+            warn(f"Number {raw_number} is likely a WhatsApp Sandbox number.")
+            warn("Sandbox webhooks must be set manually in the Twilio Console:")
+            print()
+            print(f"  1. Go to: https://console.twilio.com/us1/develop/sms/try-it-out/whatsapp-learn")
+            print(f"  2. In the 'Sandbox settings' section, set:")
+            print(f"     'When a message comes in'  →  {BOLD}{webhook_url}{RESET}")
+            print(f"     (HTTP POST)")
+            print(f"  3. Click Save.")
+            print()
+            print(f"  Then message the sandbox join-code number from WhatsApp to activate.")
 
     except Exception as exc:
         warn(f"Could not auto-register webhook: {exc}")

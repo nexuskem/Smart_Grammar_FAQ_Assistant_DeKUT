@@ -35,6 +35,10 @@ ALLOWED_HOSTS_RAW = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 ALLOWED_HOSTS_RAW = ALLOWED_HOSTS_RAW.strip("'\"")
 ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS_RAW.split(",") if h.strip()]
 
+# In development, allow Django's test client host so tests work without extra config.
+if DEBUG and "testserver" not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append("testserver")
+
 # ── Production security (active when DEBUG=False) ──────────────────────────────
 # ngrok / Gunicorn terminate SSL before Django, so tell Django to trust the
 # X-Forwarded-Proto header that the reverse proxy sets.

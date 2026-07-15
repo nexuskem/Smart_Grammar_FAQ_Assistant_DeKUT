@@ -38,6 +38,7 @@ import json
 import logging
 import os
 import tempfile
+import warnings
 from pathlib import Path
 
 import requests as http_requests
@@ -66,6 +67,16 @@ logger = logging.getLogger(__name__)
 # ── Twilio credentials (from environment) ──────────────────────────────────────
 
 TWILIO_AUTH_TOKEN       = os.getenv("TWILIO_AUTH_TOKEN", "")
+# Treat placeholder values as unconfigured so we fall back to dev mode
+_TOKEN_PLACEHOLDERS = ("replace", "your_", "example", "placeholder", "change")
+if any(hint in TWILIO_AUTH_TOKEN.lower() for hint in _TOKEN_PLACEHOLDERS):
+    TWILIO_AUTH_TOKEN = ""  # treat as not set
+    warnings.warn(
+        "TWILIO_AUTH_TOKEN appears to be a placeholder value — "
+        "running in dev mode (Twilio signature validation is DISABLED). "
+        "Set your real 32-char token in .env before going to production.",
+        stacklevel=1,
+    )
 TWILIO_WHATSAPP_NUMBER  = os.getenv("TWILIO_WHATSAPP_NUMBER", "whatsapp:+14155238886")
 PUBLIC_BASE_URL         = os.getenv("PUBLIC_BASE_URL", "")
 TTS_OUTPUT_DIR          = Path(os.getenv("TTS_OUTPUT_DIR", "media/tts"))
