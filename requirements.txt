@@ -1,0 +1,28 @@
+# ──────────────────────────────────────────────
+#  DeKUT CS & IT Smart FAQ Assistant
+#  requirements.txt
+# ──────────────────────────────────────────────
+
+# Django core
+django>=4.2,<5.0
+djangorestframework>=3.14
+
+# Twilio (WhatsApp webhook)
+twilio>=8.5
+
+# OpenAI (STT / TTS / GPT refinement)
+openai>=1.30
+
+# NLTK (CFG parser)
+nltk>=3.8
+
+# Audio handling
+pydub>=0.25          # audio format conversion (OGG → WAV)
+SpeechRecognition>=3.10  # fallback local STT (offline mode)
+
+# Environment variable loading
+python-dotenv>=1.0
+
+# Utility
+requests>=2.31
+gunicorn>=21.2        # production WSGI server
