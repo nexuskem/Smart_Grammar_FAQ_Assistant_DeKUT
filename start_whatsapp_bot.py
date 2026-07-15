@@ -112,9 +112,19 @@ def validate_env(skip_twilio: bool = False):
         _is_placeholder = any(h in auth_token.lower() for h in _placeholder_hints)
         if not auth_token or len(auth_token) < 10 or _is_placeholder:
             issues.append(
-                "TWILIO_AUTH_TOKEN looks invalid or is still the placeholder value.\n"
-                "     Get your real 32-character token from https://console.twilio.com\n"
-                "     (Main Dashboard → Auth Token → click the eye icon)."
+                "TWILIO_AUTH_TOKEN is still the placeholder value.\n"
+                "\n"
+                "     ┌─ HOW TO FIX ──────────────────────────────────────────────────────┐\n"
+                "     │  1. Open: https://console.twilio.com                              │\n"
+                "     │  2. On the main dashboard, click the 👁  eye icon next to          │\n"
+                "     │     'Auth Token' to reveal the 32-character token.                │\n"
+                "     │  3. Copy it and run:                                              │\n"
+                "     │       python3 set_token.py <paste-token-here>                     │\n"
+                "     │     OR edit .env line 17 directly.                                │\n"
+                "     │  ─────────────────────────────────────────────────────────────── │\n"
+                "     │  To run without WhatsApp (local testing only):                    │\n"
+                "     │       python3 start_whatsapp_bot.py --dev                         │\n"
+                "     └───────────────────────────────────────────────────────────────────┘"
             )
         else:
             ok("TWILIO_AUTH_TOKEN is set.")
@@ -334,11 +344,21 @@ def main():
     parser = argparse.ArgumentParser(
         description="DeKUT FAQ WhatsApp Bot Launcher",
         formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=(
+            "Examples:\n"
+            "  python3 start_whatsapp_bot.py               # full WhatsApp mode\n"
+            "  python3 start_whatsapp_bot.py --dev         # local test (no Twilio needed)\n"
+            "  python3 start_whatsapp_bot.py --no-tunnel   # use existing PUBLIC_BASE_URL\n"
+        ),
     )
     parser.add_argument("--port",       type=int, default=8000, help="Local port for Django (default: 8000)")
-    parser.add_argument("--no-twilio",  action="store_true",   help="Skip Twilio webhook registration")
-    parser.add_argument("--no-tunnel",  action="store_true",   help="Skip ngrok tunnel (use existing PUBLIC_BASE_URL)")
+    parser.add_argument("--no-twilio",  action="store_true",   help="Skip Twilio credential check and webhook registration")
+    parser.add_argument("--dev",        action="store_true",   help="Alias for --no-twilio: run locally without WhatsApp (for testing)")
+    parser.add_argument("--no-tunnel",  action="store_true",   help="Skip ngrok tunnel (use existing PUBLIC_BASE_URL from .env)")
     args = parser.parse_args()
+    # --dev is an alias for --no-twilio
+    if args.dev:
+        args.no_twilio = True
 
     print()
     print(f"{BOLD}{BLUE}{'═' * 70}{RESET}")
