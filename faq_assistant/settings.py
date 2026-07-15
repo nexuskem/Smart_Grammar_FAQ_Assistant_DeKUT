@@ -31,6 +31,8 @@ SECRET_KEY = os.getenv(
 DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in ("1", "true", "yes")
 
 ALLOWED_HOSTS_RAW = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+# Strip surrounding quotes that python-dotenv may write when the value contains commas
+ALLOWED_HOSTS_RAW = ALLOWED_HOSTS_RAW.strip("'\"")
 ALLOWED_HOSTS = [h.strip() for h in ALLOWED_HOSTS_RAW.split(",") if h.strip()]
 
 # ── Production security (active when DEBUG=False) ──────────────────────────────

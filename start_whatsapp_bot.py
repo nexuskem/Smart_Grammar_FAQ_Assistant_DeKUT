@@ -139,19 +139,24 @@ def validate_env(skip_twilio: bool = False):
 
 # ── Step 2: Start Django dev server ───────────────────────────────────────────
 
-def start_django(port: int) -> subprocess.Popen:
+def start_django(port: int, extra_env: dict | None = None) -> subprocess.Popen:
     banner(f"② Starting Django server on port {port} …")
 
-    python = sys.executable  # use the same interpreter running this script
+    python = sys.executable
     manage = PROJECT_ROOT / "manage.py"
 
+    # Merge current environment with any overrides (e.g. updated ALLOWED_HOSTS)
+    env = {**os.environ}
+    if extra_env:
+        env.update(extra_env)
+
     proc = subprocess.Popen(
-        [python, str(manage), "runserver", f"0.0.0.0:{port}",
-         "--noreload"],          # --noreload avoids double-process confusion
+        [python, str(manage), "runserver", f"0.0.0.0:{port}", "--noreload"],
         cwd=str(PROJECT_ROOT),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
+        env=env,
     )
 
     # Give it 3 seconds to start
@@ -258,20 +263,11 @@ def register_twilio_webhook(public_url: str):
 # ── Step 5: Update .env with public URL ───────────────────────────────────────
 
 def update_env_url(env_path: Path, public_url: str):
-    """Patch PUBLIC_BASE_URL and DJANGO_ALLOWED_HOSTS in .env in-place."""
+    """Patch PUBLIC_BASE_URL in .env in-place (unquoted, so Django parses it cleanly)."""
     try:
         from dotenv import set_key  # type: ignore
-        set_key(str(env_path), "PUBLIC_BASE_URL", public_url)
-
-        # Extract hostname from URL and add to ALLOWED_HOSTS
-        from urllib.parse import urlparse
-        host = urlparse(public_url).hostname or ""
-        current_hosts = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
-        if host and host not in current_hosts:
-            new_hosts = current_hosts.rstrip(",") + "," + host
-            set_key(str(env_path), "DJANGO_ALLOWED_HOSTS", new_hosts)
-            ok(f"DJANGO_ALLOWED_HOSTS updated → {new_hosts}")
-
+        # quote_mode='never' prevents python-dotenv from wrapping values in quotes
+        set_key(str(env_path), "PUBLIC_BASE_URL", public_url, quote_mode="never")
         ok(f"PUBLIC_BASE_URL updated in .env → {public_url}")
     except Exception as exc:
         warn(f"Could not update .env automatically: {exc}")
@@ -341,22 +337,30 @@ def main():
     # --- Validate ---
     validate_env(skip_twilio=args.no_twilio)
 
-    # --- Start Django ---
-    django_proc = start_django(args.port)
-
     public_url = ""
+    extra_env  = {}
 
-    # --- Tunnel ---
+    # --- Tunnel FIRST (so we know the hostname before Django starts) ---
     if args.no_tunnel:
         public_url = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
         if not public_url:
             err("--no-tunnel specified but PUBLIC_BASE_URL is not set in .env.")
-            django_proc.terminate()
             sys.exit(1)
         info(f"Using existing public URL: {public_url}")
     else:
         public_url = start_tunnel(args.port)
         update_env_url(env_path, public_url)
+
+        # Pass updated ALLOWED_HOSTS directly to Django subprocess env
+        from urllib.parse import urlparse
+        host = urlparse(public_url).hostname or ""
+        current = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+        if host and host not in current:
+            extra_env["DJANGO_ALLOWED_HOSTS"] = current.rstrip(",") + "," + host
+        extra_env["PUBLIC_BASE_URL"] = public_url
+
+    # --- Start Django (after tunnel, so ALLOWED_HOSTS includes the ngrok host) ---
+    django_proc = start_django(args.port, extra_env=extra_env)
 
     # --- Register Twilio webhook ---
     if not args.no_twilio:
